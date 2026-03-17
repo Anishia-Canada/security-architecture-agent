@@ -177,6 +177,11 @@ detect an active attacker or possible malware communicating on the network..."
 
 </details>
 
+## Demo
+
+[![Security Architecture Framework Agent — Demo](https://img.youtube.com/vi/fyYRFsWjduI/maxresdefault.jpg)](https://youtu.be/fyYRFsWjduI)
+
+> Click to watch the full demo on YouTube
 ---
 
 ## Frameworks covered
