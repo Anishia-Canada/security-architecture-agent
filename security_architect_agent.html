@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Security Architecture Framework Agent</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#060b14;--bg2:#0d1520;--bg3:#111d2e;--bg4:#162236;
+  --border:#1a2d45;--border2:#1e3550;
+  --neon-cyan:#00e5ff;--neon-green:#00ff88;--neon-amber:#ffb700;--neon-red:#ff4466;--neon-purple:#b060ff;
+  --cyan-dim:rgba(0,229,255,0.08);--green-dim:rgba(0,255,136,0.08);--amber-dim:rgba(255,183,0,0.08);
+  --cyan-glow:rgba(0,229,255,0.15);--green-glow:rgba(0,255,136,0.15);
+  --accent:#0ea5e9;--accent-dim:rgba(14,165,233,0.08);--accent-dim2:rgba(14,165,233,0.04);
+  --text:#d4e4f4;--text2:#7a9ab8;--text3:#3d5a78;
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{background:var(--bg);color:var(--text);font-family:var(--sans);}
+body{min-height:100vh;display:flex;flex-direction:column;}
+
+/* scanline texture overlay */
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.03) 2px,rgba(0,0,0,.03) 4px);pointer-events:none;z-index:0;}
+
+.header{border-bottom:1px solid var(--border);padding:0 1.5rem;display:flex;align-items:center;justify-content:space-between;height:54px;background:var(--bg);position:sticky;top:0;z-index:100;}
+.logo{width:26px;height:26px;border-radius:6px;background:var(--neon-cyan);display:flex;align-items:center;justify-content:center;box-shadow:0 0 12px rgba(0,229,255,0.4);}
+.logo svg{width:14px;height:14px;}
+.header-left{display:flex;align-items:center;gap:10px;}
+.header-title{font-size:13px;font-weight:500;color:var(--text);}
+.header-sub{font-size:11px;color:var(--text3);font-family:var(--mono);}
+.status{font-size:11px;color:var(--text3);font-family:var(--mono);display:flex;align-items:center;gap:6px;}
+.dot-live{width:6px;height:6px;border-radius:50%;background:var(--neon-green);box-shadow:0 0 6px var(--neon-green);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 6px var(--neon-green);}50%{opacity:.4;box-shadow:none;}}
+
+.main{display:flex;flex:1;overflow:hidden;position:relative;z-index:1;}
+.sidebar{width:300px;flex-shrink:0;border-right:1px solid var(--border);overflow-y:auto;padding:1.25rem;display:flex;flex-direction:column;gap:1rem;background:var(--bg);}
+.content{flex:1;overflow-y:auto;padding:1.5rem 2rem;background:var(--bg);}
+
+.slabel{font-size:10px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--text3);font-family:var(--mono);margin-bottom:7px;}
+.fgrp{display:flex;flex-direction:column;gap:5px;margin-bottom:8px;}
+.flabel{font-size:11px;color:var(--text2);font-family:var(--mono);}
+select,textarea{font-family:var(--mono);font-size:12px;color:var(--text);background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:7px 9px;width:100%;outline:none;transition:border-color .15s;appearance:none;}
+select:focus,textarea:focus{border-color:var(--neon-cyan);box-shadow:0 0 0 1px rgba(0,229,255,.2);}
+textarea{resize:vertical;min-height:66px;line-height:1.5;}
+.obj-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+.chip{padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:11px;cursor:pointer;color:var(--text3);background:var(--bg3);font-family:var(--mono);user-select:none;line-height:1.3;transition:all .15s;}
+.chip:hover{border-color:var(--neon-cyan);color:var(--neon-cyan);}
+.chip.on{border-color:var(--neon-cyan);color:var(--neon-cyan);background:var(--cyan-dim);box-shadow:0 0 8px rgba(0,229,255,.1);}
+.divider{border:none;border-top:1px solid var(--border);}
+.btn-row{display:flex;gap:8px;}
+.btn{flex:1;padding:9px 12px;border-radius:6px;border:none;font-family:var(--mono);font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;letter-spacing:.06em;}
+.btn-primary{background:var(--neon-cyan);color:#060b14;box-shadow:0 0 16px rgba(0,229,255,.3);}
+.btn-primary:hover{background:#33eeff;box-shadow:0 0 24px rgba(0,229,255,.5);}
+.btn-secondary{background:var(--bg3);color:var(--text2);border:1px solid var(--border2);}
+.btn-secondary:hover{border-color:var(--neon-cyan);color:var(--neon-cyan);}
+.btn:disabled{opacity:.35;cursor:not-allowed;box-shadow:none;}
+
+/* Output */
+.out-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;}
+.out-title{font-size:13px;font-weight:500;color:var(--text2);font-family:var(--mono);}
+.ts{font-size:10px;color:var(--text3);font-family:var(--mono);}
+.stat-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:1.25rem;}
+.stat{background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:9px 14px;}
+.stat-val{font-size:22px;font-weight:600;font-family:var(--mono);color:var(--neon-cyan);text-shadow:0 0 10px rgba(0,229,255,.4);}
+.stat-lbl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono);}
+.blend-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:1.25rem;}
+.bl{font-size:10px;font-family:var(--mono);color:var(--text3);margin-right:2px;}
+.fw-b{font-size:10px;font-family:var(--mono);font-weight:500;padding:2px 7px;border-radius:4px;}
+.fw-primary{background:var(--cyan-dim);color:var(--neon-cyan);border:1px solid rgba(0,229,255,.3);}
+.fw-supporting{background:rgba(0,255,136,.08);color:var(--neon-green);border:1px solid rgba(0,255,136,.3);}
+.fw-excluded{background:rgba(61,90,120,.15);color:var(--text3);border:1px solid var(--border);text-decoration:line-through;}
+.analysis{background:var(--bg2);border:1px solid var(--border2);border-left:3px solid var(--neon-cyan);border-radius:0 8px 8px 0;padding:1rem 1.25rem;margin-bottom:1.25rem;font-size:13px;line-height:1.7;color:var(--text2);}
+
+/* Table */
+.tbl-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border2);}
+table{width:100%;border-collapse:collapse;font-size:11.5px;min-width:960px;}
+thead{background:var(--bg2);}
+th{text-align:left;padding:9px 11px;font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.08em;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border2);white-space:nowrap;}
+td{padding:9px 11px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(0,229,255,.03);}
+.req-name{font-weight:500;color:var(--text);font-size:12px;line-height:1.4;}
+.dtag{display:inline-block;font-size:9px;font-family:var(--mono);padding:2px 6px;border-radius:3px;margin-top:3px;background:var(--bg3);color:var(--text3);border:1px solid var(--border);}
+.ph{color:#ff4466;font-family:var(--mono);font-size:10px;text-shadow:0 0 6px rgba(255,68,102,.4);}
+.pm{color:var(--neon-amber);font-family:var(--mono);font-size:10px;}
+.pl{color:var(--neon-green);font-family:var(--mono);font-size:10px;}
+.fi{display:flex;flex-direction:column;gap:2px;}
+.fitem{display:flex;align-items:flex-start;gap:4px;font-size:10.5px;font-family:var(--mono);line-height:1.4;}
+.fd{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:3px;}
+.fd-p{background:var(--neon-green);box-shadow:0 0 4px var(--neon-green);}
+.fd-s{background:var(--neon-cyan);box-shadow:0 0 4px var(--neon-cyan);}
+.fd-o{background:var(--neon-amber);}
+.fn{color:var(--border2);}
+.ft-p{color:var(--text2);}
+.ft-s{color:var(--text3);}
+.ft-o{color:var(--text3);font-style:italic;}
+
+/* Citation button */
+.cite-btn{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:4px;border:1px solid var(--border2);background:var(--bg3);color:var(--text3);font-family:var(--mono);font-size:10px;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.cite-btn:hover{border-color:var(--neon-cyan);color:var(--neon-cyan);background:var(--cyan-dim);}
+.cite-btn.has-rag{border-color:rgba(0,255,136,.35);color:var(--neon-green);background:var(--green-dim);}
+.cite-btn.has-rag:hover{box-shadow:0 0 10px rgba(0,255,136,.2);}
+.cite-count{font-weight:600;}
+
+/* Legend */
+.legend{display:flex;gap:16px;margin-top:1rem;font-size:11px;color:var(--text3);font-family:var(--mono);flex-wrap:wrap;}
+.li{display:flex;align-items:center;gap:5px;}
+
+/* ── MODAL ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(4px);z-index:999;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+
+.modal{
+  background:var(--bg2);
+  border:1px solid var(--border2);
+  border-top:2px solid var(--neon-cyan);
+  border-radius:12px;
+  width:min(740px,94vw);
+  max-height:86vh;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  box-shadow:0 0 60px rgba(0,229,255,.12), 0 24px 80px rgba(0,0,0,.6);
+  animation:modal-in .18s ease;
+}
+@keyframes modal-in{from{opacity:0;transform:scale(.96) translateY(8px);}to{opacity:1;transform:none;}}
+
+.modal-header{
+  padding:1rem 1.25rem .85rem;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  flex-shrink:0;
+  background:linear-gradient(135deg,rgba(0,229,255,.04),transparent);
+}
+.modal-header-left{flex:1;}
+.modal-label{font-size:10px;font-family:var(--mono);color:var(--neon-cyan);letter-spacing:.12em;text-transform:uppercase;margin-bottom:5px;opacity:.8;}
+.modal-req{font-size:14px;font-weight:600;color:var(--text);line-height:1.4;}
+.modal-meta{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;}
+.modal-domain{font-size:10px;font-family:var(--mono);padding:2px 8px;border-radius:3px;background:var(--bg3);color:var(--text3);border:1px solid var(--border);}
+.modal-prio-high{font-size:10px;font-family:var(--mono);padding:2px 8px;border-radius:3px;color:#ff4466;border:1px solid rgba(255,68,102,.3);background:rgba(255,68,102,.08);}
+.modal-prio-med{font-size:10px;font-family:var(--mono);padding:2px 8px;border-radius:3px;color:var(--neon-amber);border:1px solid rgba(255,183,0,.3);background:rgba(255,183,0,.08);}
+.modal-prio-low{font-size:10px;font-family:var(--mono);padding:2px 8px;border-radius:3px;color:var(--neon-green);border:1px solid rgba(0,255,136,.3);background:rgba(0,255,136,.08);}
+
+.modal-stats{display:flex;gap:20px;align-items:center;flex-shrink:0;}
+.mstat{text-align:center;}
+.mstat-val{font-size:22px;font-weight:700;font-family:var(--mono);line-height:1;}
+.mstat-lbl{font-size:9px;font-family:var(--mono);color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-top:2px;}
+.mstat.rag .mstat-val{color:var(--neon-green);text-shadow:0 0 12px rgba(0,255,136,.5);}
+.mstat.kb .mstat-val{color:var(--neon-cyan);text-shadow:0 0 12px rgba(0,229,255,.4);}
+
+.modal-close{width:30px;height:30px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;transition:all .15s;font-family:var(--mono);}
+.modal-close:hover{border-color:var(--neon-red);color:var(--neon-red);box-shadow:0 0 8px rgba(255,68,102,.3);}
+
+.modal-body{overflow-y:auto;padding:1rem 1.25rem;display:flex;flex-direction:column;gap:10px;}
+
+/* Section divider inside modal */
+.modal-section-label{font-size:10px;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;padding:4px 0 8px;border-bottom:1px solid var(--border);margin-bottom:2px;}
+.modal-section-label.rag-label{color:var(--neon-green);}
+.modal-section-label.kb-label{color:var(--neon-cyan);}
+
+/* Citation cards */
+.cite-card{border-radius:8px;padding:12px 14px;transition:border-color .15s;}
+.cite-card.rag-card{background:rgba(0,255,136,.04);border:1px solid rgba(0,255,136,.2);}
+.cite-card.rag-card:hover{border-color:rgba(0,255,136,.4);box-shadow:0 0 16px rgba(0,255,136,.08);}
+.cite-card.kb-card{background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.15);}
+.cite-card.kb-card:hover{border-color:rgba(0,229,255,.35);}
+
+.cite-top{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+.cite-id{font-size:11px;font-family:var(--mono);font-weight:600;}
+.rag-card .cite-id{color:var(--neon-green);}
+.kb-card .cite-id{color:var(--neon-cyan);}
+.cite-fw-tag{font-size:9px;font-family:var(--mono);padding:2px 6px;border-radius:3px;font-weight:500;}
+.rag-card .cite-fw-tag{background:rgba(0,255,136,.1);color:var(--neon-green);border:1px solid rgba(0,255,136,.25);}
+.kb-card .cite-fw-tag{background:rgba(0,229,255,.08);color:var(--neon-cyan);border:1px solid rgba(0,229,255,.2);}
+.cite-source-tag{font-size:9px;font-family:var(--mono);color:var(--text3);margin-left:auto;}
+.cite-score{font-size:9px;font-family:var(--mono);padding:2px 6px;border-radius:3px;background:rgba(0,255,136,.08);color:var(--neon-green);border:1px solid rgba(0,255,136,.2);}
+
+/* Confidence bar */
+.conf-bar-wrap{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.conf-bar-bg{flex:1;height:3px;background:var(--bg3);border-radius:2px;overflow:hidden;}
+.conf-bar-fill{height:100%;border-radius:2px;transition:width .4s ease;}
+.rag-card .conf-bar-fill{background:var(--neon-green);box-shadow:0 0 6px var(--neon-green);}
+.conf-label{font-size:9px;font-family:var(--mono);color:var(--text3);white-space:nowrap;}
+
+.cite-text{font-size:12px;color:var(--text2);line-height:1.7;border-left:2px solid var(--border2);padding-left:10px;margin-top:4px;}
+.rag-card .cite-text{border-left-color:rgba(0,255,136,.3);}
+.kb-card .cite-text{border-left-color:rgba(0,229,255,.2);}
+
+.modal-empty{font-size:12px;color:var(--text3);font-family:var(--mono);padding:2rem 0;text-align:center;}
+
+/* Diagram */
+.diag-container{border:1px solid var(--border2);border-top:2px solid var(--neon-purple);border-radius:10px;overflow:hidden;background:var(--bg2);}
+.diag-header{padding:12px 16px;border-bottom:1px solid var(--border2);}
+.diag-title{font-size:13px;font-weight:500;color:var(--text);}
+.diag-obj{font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:3px;}
+.diag-body{padding:16px;display:flex;flex-direction:column;gap:10px;}
+.layer{border-radius:8px;padding:12px 14px;border:1px solid;}
+.layer-name{font-size:11px;font-weight:600;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;}
+.comp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;}
+.comp{background:rgba(0,0,0,.3);border-radius:6px;padding:8px 10px;border:1px solid rgba(255,255,255,.05);}
+.comp-name{font-size:11.5px;font-weight:500;color:var(--text);margin-bottom:2px;}
+.comp-desc{font-size:10px;color:rgba(255,255,255,.35);font-family:var(--mono);}
+.comp-ref{font-size:9px;font-family:var(--mono);margin-top:4px;color:var(--text3);opacity:.7;}
+.cc-row{display:flex;gap:8px;flex-wrap:wrap;padding:10px 14px;border-top:1px solid var(--border);}
+.cc-chip{font-size:10px;font-family:var(--mono);padding:4px 10px;border-radius:4px;background:rgba(176,96,255,.12);color:#c990ff;border:1px solid rgba(176,96,255,.3);}
+.lc-blue{background:rgba(0,229,255,.06);border-color:rgba(0,229,255,.2);}.lc-blue .layer-name{color:var(--neon-cyan);}
+.lc-teal{background:rgba(0,255,136,.05);border-color:rgba(0,255,136,.2);}.lc-teal .layer-name{color:var(--neon-green);}
+.lc-purple{background:rgba(176,96,255,.07);border-color:rgba(176,96,255,.2);}.lc-purple .layer-name{color:#c990ff;}
+.lc-amber{background:rgba(255,183,0,.06);border-color:rgba(255,183,0,.2);}.lc-amber .layer-name{color:var(--neon-amber);}
+.lc-green{background:rgba(0,255,136,.06);border-color:rgba(0,255,136,.2);}.lc-green .layer-name{color:var(--neon-green);}
+.lc-coral{background:rgba(255,100,50,.07);border-color:rgba(255,100,50,.2);}.lc-coral .layer-name{color:#ff8060;}
+
+/* Loading & error */
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;height:50vh;gap:14px;}
+.spinner{width:28px;height:28px;border:2px solid var(--border2);border-top-color:var(--neon-cyan);border-radius:50%;animation:spin .8s linear infinite;box-shadow:0 0 8px rgba(0,229,255,.2);}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-txt{font-family:var(--mono);font-size:12px;color:var(--text3);}
+.err{background:rgba(255,68,102,.06);border:1px solid rgba(255,68,102,.3);border-radius:8px;padding:1rem 1.25rem;font-family:var(--mono);font-size:12px;color:#ff8899;line-height:1.6;}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:55vh;gap:10px;color:var(--text3);text-align:center;}
+.empty-icon{font-size:32px;opacity:.2;}
+.empty-t{font-size:14px;color:var(--text2);}
+.empty-s{font-size:12px;font-family:var(--mono);max-width:280px;line-height:1.6;}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <div class="logo">
+      <svg viewBox="0 0 14 14" fill="none"><path d="M7 1L13 4.5V9.5L7 13L1 9.5V4.5L7 1Z" stroke="#060b14" stroke-width="1.5"/><circle cx="7" cy="7" r="2" fill="#060b14"/></svg>
+    </div>
+    <div>
+      <div class="header-title">Security Architecture Framework Agent</div>
+      <div class="header-sub">SABSA · TOGAF · Zachman · NIST CSF · Zero Trust · NAF/DODAF</div>
+    </div>
+  </div>
+  <div class="status"><span class="dot-live"></span><span id="status-txt">ready</span></div>
+</header>
+
+<!-- Citation Modal -->
+<div class="modal-overlay" id="modal-overlay" onclick="handleOverlayClick(event)">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <div class="modal-header-left">
+        <div class="modal-label">Framework Citations</div>
+        <div class="modal-req" id="modal-req"></div>
+        <div class="modal-meta">
+          <span class="modal-domain" id="modal-domain"></span>
+          <span id="modal-prio"></span>
+        </div>
+      </div>
+      <div class="modal-stats" id="modal-stats"></div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<div class="main">
+  <aside class="sidebar">
+    <div>
+      <div class="slabel">Organization</div>
+      <div class="fgrp">
+        <span class="flabel">Type</span>
+        <select id="org-type">
+          <option value="">Select...</option>
+          <option>Enterprise (1000+ employees)</option>
+          <option>Mid-market (100–999)</option>
+          <option>Government / Public sector</option>
+          <option>Defense / Allied</option>
+          <option>Financial services</option>
+          <option>Healthcare</option>
+          <option>Technology / SaaS</option>
+        </select>
+      </div>
+      <div class="fgrp">
+        <span class="flabel">Regulatory environment</span>
+        <select id="reg-env">
+          <option value="">None / Not specified</option>
+          <option>SOC 2 / ISO 27001</option>
+          <option>FedRAMP</option>
+          <option>HIPAA / HITRUST</option>
+          <option>PCI-DSS</option>
+          <option>DORA / NIS2 (EU)</option>
+        </select>
+      </div>
+      <div class="fgrp">
+        <span class="flabel">Architecture maturity</span>
+        <select id="maturity">
+          <option value="">Select...</option>
+          <option value="initial">Initial — ad hoc, reactive</option>
+          <option value="defined">Defined — documented policies</option>
+          <option value="managed">Managed — risk-based governance</option>
+          <option value="optimizing">Optimizing — continuous improvement</option>
+        </select>
+      </div>
+    </div>
+    <hr class="divider">
+    <div>
+      <div class="slabel">Strategic objectives</div>
+      <div class="obj-grid">
+        <div class="chip on" data-val="Cloud-first migration (on-prem to cloud)">Cloud-first migration</div>
+        <div class="chip on" data-val="Modernization of existing on-prem / hybrid infrastructure">Infra modernization</div>
+        <div class="chip" data-val="API-first architecture and service integration">API-first</div>
+        <div class="chip" data-val="AI-native / AI-first platform strategy">AI-native</div>
+        <div class="chip" data-val="Mobile-first digital experience">Mobile-first</div>
+        <div class="chip" data-val="Platform-first / product platform strategy">Platform-first</div>
+        <div class="chip" data-val="Zero Trust network architecture adoption">Zero Trust</div>
+        <div class="chip" data-val="Multi-cloud / hybrid cloud governance">Multi-cloud</div>
+        <div class="chip" data-val="DevSecOps and CI/CD pipeline security">DevSecOps</div>
+      </div>
+    </div>
+    <hr class="divider">
+    <div>
+      <div class="slabel">Additional context</div>
+      <textarea id="ctx" placeholder="e.g. 40 legacy Java apps migrating to AWS..."></textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btn-map" onclick="runMapping()">
+        <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><polygon points="1,1 10,5.5 1,10" fill="#060b14"/></svg>
+        Mapping
+      </button>
+      <button class="btn btn-secondary" id="btn-diag" onclick="runDiagram()">
+        <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><rect x="1" y="1" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="6" y="6" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1.2"/><line x1="3" y1="5" x2="3" y2="8" stroke="currentColor" stroke-width="1"/><line x1="3" y1="8" x2="6" y2="8" stroke="currentColor" stroke-width="1"/></svg>
+        Diagram
+      </button>
+    </div>
+    <div id="sidebar-err"></div>
+  </aside>
+
+  <main class="content" id="content">
+    <div class="empty">
+      <div class="empty-icon">⬡</div>
+      <div class="empty-t">No analysis yet</div>
+      <div class="empty-s">Configure your org profile and run the framework mapping or architecture diagram.</div>
+    </div>
+  </main>
+</div>
+
+<script>
+const API = 'http://localhost:8000';
+let _rowData = []; // store rows for modal access
+
+document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => c.classList.toggle('on')));
+
+function getProfile() {
+  return {
+    org_type: document.getElementById('org-type').value,
+    regulatory: document.getElementById('reg-env').value || 'Not specified',
+    maturity: document.getElementById('maturity').value,
+    objectives: [...document.querySelectorAll('.chip.on')].map(c => c.dataset.val),
+    context: document.getElementById('ctx').value
+  };
+}
+function validate(p) {
+  const err = document.getElementById('sidebar-err');
+  if (!p.org_type || !p.maturity || !p.objectives.length) {
+    err.innerHTML = '<div style="font-size:11px;color:#ff4466;font-family:var(--mono);margin-top:6px;padding:7px;background:rgba(255,68,102,.08);border-radius:6px;border:1px solid rgba(255,68,102,.2)">Select org type, maturity, and at least one objective.</div>';
+    return false;
+  }
+  err.innerHTML = '';
+  return true;
+}
+function setLoading(msg) {
+  document.getElementById('content').innerHTML = `<div class="loading"><div class="spinner"></div><div class="loading-txt">${msg}</div></div>`;
+}
+function setBusy(busy) {
+  document.getElementById('btn-map').disabled = busy;
+  document.getElementById('btn-diag').disabled = busy;
+  document.getElementById('status-txt').textContent = busy ? 'analyzing...' : 'ready';
+}
+function prio(p) {
+  const v=(p||'').toLowerCase();
+  if(v==='high') return '<span class="ph">HIGH</span>';
+  if(v==='medium') return '<span class="pm">MED</span>';
+  return '<span class="pl">LOW</span>';
+}
+function prioModal(p) {
+  const v=(p||'').toLowerCase();
+  if(v==='high') return '<span class="modal-prio-high">HIGH PRIORITY</span>';
+  if(v==='medium') return '<span class="modal-prio-med">MED PRIORITY</span>';
+  return '<span class="modal-prio-low">LOW PRIORITY</span>';
+}
+function fitCell(d) {
+  if(!d||d.fit==='none') return '<span class="fn">—</span>';
+  const dc={primary:'fd-p',secondary:'fd-s',optional:'fd-o'}[d.fit]||'fd-p';
+  const tc={primary:'ft-p',secondary:'ft-s',optional:'ft-o'}[d.fit]||'ft-p';
+  return `<div class="fi"><div class="fitem"><span class="fd ${dc}"></span><span class="${tc}">${d.artifact||d.fit}</span></div></div>`;
+}
+function layerColor(c) {
+  return {blue:'lc-blue',teal:'lc-teal',purple:'lc-purple',amber:'lc-amber',green:'lc-green',coral:'lc-coral'}[c]||'lc-blue';
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function openCitations(rowIndex) {
+  const row = _rowData[rowIndex];
+  if (!row) return;
+  const citations = row.citations || [];
+  const ragCites = citations.filter(c => c.type === 'rag');
+  const kbCites  = citations.filter(c => c.type === 'kb' || !c.type);
+
+  document.getElementById('modal-req').textContent = row.requirement || '';
+  document.getElementById('modal-domain').textContent = row.domain || '';
+  document.getElementById('modal-prio').innerHTML = prioModal(row.priority);
+
+  // Stats
+  document.getElementById('modal-stats').innerHTML = `
+    <div class="mstat rag">
+      <div class="mstat-val">${ragCites.length}</div>
+      <div class="mstat-lbl">RAG sources</div>
+    </div>
+    <div class="mstat kb">
+      <div class="mstat-val">${kbCites.length}</div>
+      <div class="mstat-lbl">KB clauses</div>
+    </div>`;
+
+  // Build body
+  let html = '';
+
+  if (citations.length === 0) {
+    html = '<div class="modal-empty">No citations available for this requirement.</div>';
+  } else {
+    if (ragCites.length > 0) {
+      html += `<div class="modal-section-label rag-label">Document citations — retrieved from framework PDFs</div>`;
+      ragCites.forEach(c => {
+        const score = c.score || 0;
+        const pct = Math.round(score * 100);
+        html += `
+          <div class="cite-card rag-card">
+            <div class="cite-top">
+              <span class="cite-id">${c.id}</span>
+              <span class="cite-fw-tag">${c.framework}</span>
+              ${c.source ? `<span class="cite-source-tag">${c.source}</span>` : ''}
+              ${score ? `<span class="cite-score">${pct}% match</span>` : ''}
+            </div>
+            ${score ? `<div class="conf-bar-wrap">
+              <div class="conf-bar-bg"><div class="conf-bar-fill" style="width:${pct}%"></div></div>
+              <span class="conf-label">Relevance</span>
+            </div>` : ''}
+            <div class="cite-text">${c.clause || ''}</div>
+          </div>`;
+      });
+    }
+
+    if (kbCites.length > 0) {
+      html += `<div class="modal-section-label kb-label" style="margin-top:${ragCites.length?'8px':'0'}">Knowledge base — curated framework clauses</div>`;
+      kbCites.forEach(c => {
+        html += `
+          <div class="cite-card kb-card">
+            <div class="cite-top">
+              <span class="cite-id">${c.id}</span>
+              <span class="cite-fw-tag">${c.framework}</span>
+            </div>
+            <div class="cite-text">${c.clause || ''}</div>
+          </div>`;
+      });
+    }
+  }
+
+  document.getElementById('modal-body').innerHTML = html;
+  document.getElementById('modal-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ── Mapping ───────────────────────────────────────────────────────────────────
+async function runMapping() {
+  const p = getProfile();
+  if (!validate(p)) return;
+  setBusy(true);
+  setLoading('Agent reasoning over frameworks...');
+  try {
+    const r = await fetch(`${API}/analyze`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+    if (!r.ok) { const e = await r.json(); throw new Error(e.detail||`HTTP ${r.status}`); }
+    const data = await r.json();
+    renderMapping(data, p.org_type);
+  } catch(e) {
+    document.getElementById('content').innerHTML = `<div class="err"><strong>Error</strong><br><br>${e.message}<br><br>Is agent_v2.py running?</div>`;
+  }
+  setBusy(false);
+}
+
+async function runDiagram() {
+  const p = getProfile();
+  if (!validate(p)) return;
+  setBusy(true);
+  setLoading('Generating conceptual security architecture...');
+  try {
+    const r = await fetch(`${API}/diagram`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+    if (!r.ok) { const e = await r.json(); throw new Error(e.detail||`HTTP ${r.status}`); }
+    const data = await r.json();
+    renderDiagram(data.diagram, p.org_type);
+  } catch(e) {
+    document.getElementById('content').innerHTML = `<div class="err"><strong>Error</strong><br><br>${e.message}<br><br>Is agent_v2.py running?</div>`;
+  }
+  setBusy(false);
+}
+
+function renderMapping(data, orgType) {
+  const m = data.mapping;
+  const rows = m.rows || [];
+  _rowData = rows; // store for modal
+  const blend = m.framework_blend || {};
+  const fwKeys = ['SABSA','TOGAF','Zachman','NIST CSF','Zero Trust','NAF/DODAF'];
+  const high = rows.filter(r => r.priority?.toLowerCase() === 'high').length;
+  const totalCites = rows.reduce((s,r) => s + (r.citations||[]).length, 0);
+  const ragCount = rows.reduce((s,r) => s + (r.citations||[]).filter(c=>c.type==='rag').length, 0);
+
+  const pB = (blend.primary||[]).map(f=>`<span class="fw-b fw-primary">${f}</span>`).join('');
+  const sB = (blend.supporting||[]).map(f=>`<span class="fw-b fw-supporting">${f}</span>`).join('');
+  const eB = (blend.excluded||[]).map(f=>`<span class="fw-b fw-excluded">${f}</span>`).join('');
+
+  const trows = rows.map((row,i) => {
+    const fws = fwKeys.map(fw => `<td>${fitCell((row.frameworks||{})[fw])}</td>`).join('');
+    const cites = row.citations || [];
+    const hasRag = cites.some(c => c.type === 'rag');
+    const btnClass = hasRag ? 'cite-btn has-rag' : 'cite-btn';
+    const btnLabel = cites.length > 0
+      ? `<span class="cite-count">${cites.length}</span> cite${cites.length!==1?'s':''}`
+      : 'no cites';
+    return `<tr>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--text3)">${String(i+1).padStart(2,'0')}</td>
+      <td>
+        <div class="req-name">${row.requirement||''}</div>
+        <div class="dtag">${row.domain||''}</div>
+      </td>
+      <td>${prio(row.priority)}</td>
+      ${fws}
+      <td>
+        ${cites.length > 0
+          ? `<button class="${btnClass}" onclick="openCitations(${i})">${btnLabel}</button>`
+          : `<span style="font-size:10px;color:var(--text3);font-family:var(--mono)">—</span>`}
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('content').innerHTML = `
+    <div class="out-header">
+      <span class="out-title">Framework mapping — ${orgType}</span>
+      <span class="ts">Generated ${new Date().toLocaleTimeString()}</span>
+    </div>
+    <div class="stat-row">
+      <div class="stat"><div class="stat-val">${rows.length}</div><div class="stat-lbl">Requirements</div></div>
+      <div class="stat"><div class="stat-val">${high}</div><div class="stat-lbl">High priority</div></div>
+      <div class="stat"><div class="stat-val">${(blend.primary||[]).length}</div><div class="stat-lbl">Primary frameworks</div></div>
+      <div class="stat"><div class="stat-val" style="color:var(--neon-green);text-shadow:0 0 10px rgba(0,255,136,.4)">${ragCount}</div><div class="stat-lbl">RAG citations</div></div>
+    </div>
+    <div class="blend-row">
+      <span class="bl">Primary</span>${pB}
+      <span class="bl" style="margin-left:6px">Supporting</span>${sB}
+      <span class="bl" style="margin-left:6px">Excluded</span>${eB}
+    </div>
+    <div class="analysis">${data.analysis_text}</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>#</th><th>Security requirement</th><th>Priority</th>
+          ${fwKeys.map(f=>`<th>${f}</th>`).join('')}
+          <th>Citations</th>
+        </tr></thead>
+        <tbody>${trows}</tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <div class="li"><span class="fd fd-p"></span>Primary</div>
+      <div class="li"><span class="fd fd-s"></span>Secondary</div>
+      <div class="li"><span class="fd fd-o"></span>Optional</div>
+      <div style="margin-left:auto;font-size:10px;color:var(--text3)">Click citations button on any row to view framework sources</div>
+    </div>`;
+}
+
+function renderDiagram(diag, orgType) {
+  const layers = (diag.layers||[]).map(l=>`
+    <div class="layer ${layerColor(l.color)}">
+      <div class="layer-name">${l.name}</div>
+      <div class="comp-grid">
+        ${(l.components||[]).map(c=>`
+          <div class="comp">
+            <div class="comp-name">${c.name}</div>
+            <div class="comp-desc">${c.desc||''}</div>
+            <div class="comp-ref">${c.framework_ref||''}</div>
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+  const cc = (diag.cross_cutting||[]).map(c=>`<span class="cc-chip">${c.name}</span>`).join('');
+  document.getElementById('content').innerHTML = `
+    <div class="out-header">
+      <span class="out-title">Architecture diagram — ${orgType}</span>
+      <span class="ts">Generated ${new Date().toLocaleTimeString()}</span>
+    </div>
+    <div class="diag-container">
+      <div class="diag-header">
+        <div class="diag-title">${diag.title||'Conceptual Security Reference Architecture'}</div>
+        <div class="diag-obj">${diag.objective||''}</div>
+      </div>
+      <div class="diag-body">${layers}</div>
+      ${cc?`<div class="cc-row"><span style="font-size:10px;font-family:var(--mono);color:var(--text3);margin-right:4px">Cross-cutting:</span>${cc}</div>`:''}
+    </div>`;
+}
+</script>
+</body>
+</html>
